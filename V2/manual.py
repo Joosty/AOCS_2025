@@ -147,7 +147,7 @@ class ManualControl:
         """Monitor gyroscope and angle in background thread"""
         dt = 0.05  # 20Hz update rate
         gyro_filtered = 0.0
-        alpha = 0.8
+        alpha = 0.0
         
         while self.running:
             try:
