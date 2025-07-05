@@ -153,12 +153,14 @@ class ManualControl:
             try:
                 gyro_z = self.read_gyro_z()
                 gyro_filtered = alpha * gyro_filtered + (1 - alpha) * gyro_z
+                
+                # Add gyro reading to angle (positive gyro = clockwise = increasing angle)
                 self.current_angle += gyro_filtered * dt
                 
-                # Normalize angle to -180 to 180 range
-                while self.current_angle > 180:
+                # Normalize angle to 0-360 degree range (clockwise positive)
+                while self.current_angle >= 360:
                     self.current_angle -= 360
-                while self.current_angle < -180:
+                while self.current_angle < 0:
                     self.current_angle += 360
                 
                 time.sleep(dt)
