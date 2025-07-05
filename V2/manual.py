@@ -7,9 +7,9 @@ import tty
 import termios
 
 # Pin Configuration
-IN1 = 17     # GPIO17 (Pin 11) - Motor direction pin 1
-IN2 = 27     # GPIO27 (Pin 13) - Motor direction pin 2
-ENA = 18     # GPIO18 (Pin 12) - PWM pin for controlling motor speed (EnA)
+IN1 = 17
+IN2 = 27
+ENA = 18
 
 # MPU9250 I2C Configuration
 MPU9250_ADDR = 0x68
@@ -27,15 +27,15 @@ class ManualControl:
         self.current_speed = 0
         self.motor_direction = 0
         self._current_duty = 0
-
+        
         self.setup_gpio()
         self.setup_i2c()
         self.initialize_mpu9250()
         self.init_kalman()
-
+        
         self.monitor_thread = threading.Thread(target=self.monitor_position, daemon=True)
         self.monitor_thread.start()
-
+        
         print("Manual Control Initialized")
         print("Use 'a' to turn left, 'd' to turn right")
         print("Press 'q' to quit")
@@ -45,6 +45,7 @@ class ManualControl:
         GPIO.setup(ENA, GPIO.OUT)
         GPIO.setup(IN1, GPIO.OUT)
         GPIO.setup(IN2, GPIO.OUT)
+        
         self.pwm = GPIO.PWM(ENA, 1000)
         self.pwm.start(0)
         self.stop_motor()
@@ -67,18 +68,6 @@ class ManualControl:
         except Exception as e:
             print(f"Warning: Could not initialize MPU9250: {e}")
 
-    def read_gyro_z(self):
-        if self.bus is None:
-            return 0.0
-        try:
-            data = self.bus.read_i2c_block_data(MPU9250_ADDR, GYRO_ZOUT_H, 2)
-            gyro_z = (data[0] << 8) | data[1]
-            if gyro_z > 32767:
-                gyro_z -= 65536
-            return gyro_z / 131.0
-        except Exception:
-            return 0.0
-
     def init_kalman(self):
         self.angle_est = 0.0
         self.bias_est = 0.0
@@ -97,7 +86,7 @@ class ManualControl:
         self.P[1][1] += self.Q_bias * dt
 
         S = self.P[0][0] + self.R_measure
-        K = [self.P[0][0]/S, self.P[1][0]/S]
+        K = [self.P[0][0] / S, self.P[1][0] / S]
 
         y = new_rate - rate
         self.angle_est += K[0] * y
@@ -111,6 +100,18 @@ class ManualControl:
         self.P[1][0] -= K[1] * P00_temp
         self.P[1][1] -= K[1] * P01_temp
 
+    def read_gyro_z(self):
+        if self.bus is None:
+            return 0.0
+        try:
+            data = self.bus.read_i2c_block_data(MPU9250_ADDR, GYRO_ZOUT_H, 2)
+            gyro_z = (data[0] << 8) | data[1]
+            if gyro_z > 32767:
+                gyro_z -= 65536
+            return gyro_z / 131.0
+        except Exception:
+            return 0.0
+
     def monitor_position(self):
         dt = 0.05
         while self.running:
@@ -123,8 +124,6 @@ class ManualControl:
                 time.sleep(dt)
 
     def ramp_to_duty(self, target_duty, ramp_time=0.3, step_delay=0.02):
-        if target_duty == 0:
-            ramp_time = 0.2
         current_duty = self._current_duty
         steps = int(ramp_time / step_delay) or 1
         duty_step = (target_duty - current_duty) / steps
@@ -175,7 +174,7 @@ class ManualControl:
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
-            tty.setraw(fd)
+            tty.setraw(sys.stdin.fileno())
             char = sys.stdin.read(1)
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
@@ -184,7 +183,7 @@ class ManualControl:
     def log_position(self):
         timestamp = time.strftime("%H:%M:%S")
         gyro_z = self.read_gyro_z()
-        log_entry = f"[{timestamp}] Position: {self.current_angle:.1f}°, Gyro: {gyro_z:.1f} deg/s, Speed: {self.current_speed}%, Direction: {self.motor_direction}"
+        log_entry = f"[{timestamp}] Angle: {self.current_angle:.1f}°, Gyro: {gyro_z:.1f} deg/s, Speed: {self.current_speed}%, Direction: {self.motor_direction}"
         print(log_entry)
         try:
             with open("position_log.txt", "a") as f:
@@ -221,7 +220,7 @@ class ManualControl:
                         print(f"Position: {self.current_angle:.1f}°, Speed: {self.current_speed}%, Direction: {self.motor_direction}")
                     elif char == ' ':
                         self.log_position()
-                    elif char == '\x03':  # Ctrl+C
+                    elif char == '\x03':
                         break
                 except KeyboardInterrupt:
                     break
